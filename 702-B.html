@@ -1,0 +1,676 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horario Académico - Aula 702-B</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding-top: 250px;
+            background: white;
+        }
+        
+        .header-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            /*background: linear-gradient(to right, #7fb174, #a8d8a8);*/
+            background: #7fb174;
+            z-index: 300; /* Aumentado para que esté siempre encima */            
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: 250px;
+        }
+        
+        .header-content {
+            /*max-width: calc(100px + 6 * 150px);*/
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            height: 60px;
+        }
+        
+        .logo {
+            height: 50px;
+            width: auto;
+        }
+        
+        .aula-info {
+            font-size: 130px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+            text-align: center;
+            padding: 10px 0;
+            line-height: 1;
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+        }
+        
+        .hora-fecha-container {
+            color: white;
+            text-align: right;
+        }
+        
+        .hora-actual {
+            font-size: 43px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        
+        .fecha-actual {
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        
+        .horario {
+            margin: 0 auto;
+            /*width: calc(100px + 6 * 150px);*/
+            display: grid;
+            grid-template-columns: 100px repeat(6, minmax(150px, 1fr));
+            /*border: 1px solid #ddd;*/
+            background: white;
+        }
+        
+        .hora-columna {
+            position: sticky;
+            top: 250px;
+            z-index: 200; /* Menor que header pero mayor que cursos */
+            background: #7fb174;
+        }
+        
+        .columna {
+            border-left: 1px solid #ddd;
+            min-width: 0;
+        }
+        
+        .titulo-dia {
+            position: sticky;
+            top: 250px;
+            z-index: 200; /* Igual que hora-columna */
+            text-align: center;
+            font-weight: bold;
+            padding: 8px 0;
+            background: #7fb174;
+            border-bottom: 1px solid #5a8f5a;
+            font-size: 13px;
+            color: white;
+            text-transform: uppercase;
+        }
+        
+        .hora {
+            height: 20px;
+            font-size: 11px;
+            border-bottom: 1px solid #5a8f5a;
+            text-align: center;
+            box-sizing: border-box;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #7fb174;
+        }
+        
+        .bloque-contenedor {
+            position: relative;
+            height: 1180px;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent,
+                transparent 19px,
+                #f5f5f5 19px,
+                #f5f5f5 20px
+            );
+        }
+        
+        .curso {
+            position: absolute;
+            left: 1px;
+            right: 1px;
+            padding: 2px 4px;
+            font-size: 11px;
+            overflow: hidden;
+            background: #ddd;
+            color: #333;
+            box-sizing: border-box;
+            border-left: 3px solid #999;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            word-wrap: break-word;
+            white-space: normal;
+            overflow-wrap: break-word;
+            align-items: center;
+            transition: all 0.3s ease;
+            z-index: 100; /* Menor que header y columnas */
+            max-height: 100%;
+        }
+        
+        .curso.actual {
+            border: 3px solid #ff0000 !important;
+            box-shadow: 0 0 0 3px rgba(255,0,0,0.5);
+            animation: pulse 1.5s infinite;
+            background-color: #fff0f0 !important;
+            transform: scale(1.03);
+            z-index: 250; /* Mayor que columnas pero menor que header */
+        }
+        
+        .curso:hover {
+            overflow: visible;
+            z-index: 150; /* Mayor que cursos normales al hacer hover */
+            background: #f0f0f0;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            min-height: fit-content;
+            transform: scale(1.02);
+            transition: all 0.3s ease;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+                
+            }
+            70% {
+                box-shadow: 0 0 0 15px rgba(255, 0, 0, 0);
+                
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+                
+            }
+        }
+        
+        .nombre-curso {
+            font-weight: bold;
+            font-size: 11px;
+            line-height: 1.2;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            width: 100%;
+        }
+        
+        .grupo-seccion {
+            text-decoration: underline;
+            font-weight: normal;
+        }
+        
+        .nombre-docente {
+            font-size: 9px;
+            color: #555;
+            line-height: 1.2;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            width: 100%;
+        }
+        
+        .nombre-carrera {
+            font-size: 8px;
+            color: #666;
+            font-style: italic;
+            line-height: 1.2;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            width: 100%;
+        }
+        
+        .aula-curso {
+            font-size: 8px;
+            color: #444;
+            line-height: 1.2;
+            width: 100%;
+        }
+        
+        .indicador-en-curso {
+            font-size: 9px;
+            margin: 1px 0 0 0;
+            text-align: center;
+            width: 100%;
+            background: rgba(255, 0, 0, 0.08);
+            padding: 2px 0;
+            border-top: 1px dashed rgba(255, 0, 0, 0.3);
+        }
+
+        .texto-en-curso {
+            color: #d50000;
+            font-weight: bold;
+            display: inline;
+        }
+
+        .hora-actual-horario {
+            color: #ff0000;
+            font-family: 'Courier New', monospace;
+            font-size: 9px;
+            display: inline;
+            margin-left: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Cabecera fija -->
+    <div class="header-container">
+        <div class="header-content">
+            <div class="header-top">
+                <img src="logo.png" alt="Logo Institucional" class="logo">
+                <div class="hora-fecha-container">
+                    <div class="hora-actual" id="hora-actual">15:45:23</div>
+                    <div class="fecha-actual" id="fecha-actual">10 de mayo de 2023</div>
+                </div>
+            </div>
+            <div class="aula-info">AULA 702-B</div>
+        </div>
+    </div>
+
+    <!-- Horario -->
+    <div class="horario">
+        <div class="hora-columna">
+            <div class="titulo-dia">HORARIO</div>
+<div class="hora">07:00 - 07:15</div>
+<div class="hora">07:15 - 07:30</div>
+<div class="hora">07:30 - 07:45</div>
+<div class="hora">07:45 - 08:00</div>
+<div class="hora">08:00 - 08:15</div>
+<div class="hora">08:15 - 08:30</div>
+<div class="hora">08:30 - 08:45</div>
+<div class="hora">08:45 - 09:00</div>
+<div class="hora">09:00 - 09:15</div>
+<div class="hora">09:15 - 09:30</div>
+<div class="hora">09:30 - 09:45</div>
+<div class="hora">09:45 - 10:00</div>
+<div class="hora">10:00 - 10:15</div>
+<div class="hora">10:15 - 10:30</div>
+<div class="hora">10:30 - 10:45</div>
+<div class="hora">10:45 - 11:00</div>
+<div class="hora">11:00 - 11:15</div>
+<div class="hora">11:15 - 11:30</div>
+<div class="hora">11:30 - 11:45</div>
+<div class="hora">11:45 - 12:00</div>
+<div class="hora">12:00 - 12:15</div>
+<div class="hora">12:15 - 12:30</div>
+<div class="hora">12:30 - 12:45</div>
+<div class="hora">12:45 - 13:00</div>
+<div class="hora">13:00 - 13:15</div>
+<div class="hora">13:15 - 13:30</div>
+<div class="hora">13:30 - 13:45</div>
+<div class="hora">13:45 - 14:00</div>
+<div class="hora">14:00 - 14:15</div>
+<div class="hora">14:15 - 14:30</div>
+<div class="hora">14:30 - 14:45</div>
+<div class="hora">14:45 - 15:00</div>
+<div class="hora">15:00 - 15:15</div>
+<div class="hora">15:15 - 15:30</div>
+<div class="hora">15:30 - 15:45</div>
+<div class="hora">15:45 - 16:00</div>
+<div class="hora">16:00 - 16:15</div>
+<div class="hora">16:15 - 16:30</div>
+<div class="hora">16:30 - 16:45</div>
+<div class="hora">16:45 - 17:00</div>
+<div class="hora">17:00 - 17:15</div>
+<div class="hora">17:15 - 17:30</div>
+<div class="hora">17:30 - 17:45</div>
+<div class="hora">17:45 - 18:00</div>
+<div class="hora">18:00 - 18:15</div>
+<div class="hora">18:15 - 18:30</div>
+<div class="hora">18:30 - 18:45</div>
+<div class="hora">18:45 - 19:00</div>
+<div class="hora">19:00 - 19:15</div>
+<div class="hora">19:15 - 19:30</div>
+<div class="hora">19:30 - 19:45</div>
+<div class="hora">19:45 - 20:00</div>
+<div class="hora">20:00 - 20:15</div>
+<div class="hora">20:15 - 20:30</div>
+<div class="hora">20:30 - 20:45</div>
+<div class="hora">20:45 - 21:00</div>
+<div class="hora">21:00 - 21:15</div>
+<div class="hora">21:15 - 21:30</div>
+
+        </div>
+<div class="columna" data-dia="LUNES">
+<div class="titulo-dia">LUNES</div>
+<div class="bloque-contenedor">
+
+        <div class="curso" 
+             data-dia="LUNES" 
+             data-inicio="420" 
+             data-fin="510"
+             style="top: 0px; height: 120px; background: #A8DADC; border-left-color: #A8DADC;">
+            
+            <div class="nombre-curso">IMPLANTOLOGIA ORAL CLINICA I <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">MILDRED VILLANUEVA O.</div>
+            <div class="nombre-carrera">2ª ESP. EN PERIODONCIA E IMPLANTOLOGIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="LUNES" 
+             data-inicio="960" 
+             data-fin="1050"
+             style="top: 720px; height: 120px; background: #F6BD60; border-left-color: #F6BD60;">
+            
+            <div class="nombre-curso">IMAGENOLOGIA Y PATOLOGIA ORAL <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">ENRIQUE DE LOS RIOS</div>
+            <div class="nombre-carrera">2ª ESP. EN PERIODONCIA E IMPLANTOLOGIA</div>
+        
+        </div>
+
+        </div>
+</div>
+<div class="columna" data-dia="MARTES">
+<div class="titulo-dia">MARTES</div>
+<div class="bloque-contenedor">
+
+        <div class="curso" 
+             data-dia="MARTES" 
+             data-inicio="420" 
+             data-fin="510"
+             style="top: 0px; height: 120px; background: #84A59D; border-left-color: #84A59D;">
+            
+            <div class="nombre-curso">PERIODONCIA CLINICA I <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">CHRISTIAN ROJAS V.</div>
+            <div class="nombre-carrera">2ª ESP. EN PERIODONCIA E IMPLANTOLOGIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="MARTES" 
+             data-inicio="870" 
+             data-fin="960"
+             style="top: 600px; height: 120px; background: #F28482; border-left-color: #F28482;">
+            
+            <div class="nombre-curso">PRESENTACION DE CASOS CLINICOS I <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">ERICK ALPACA Z.</div>
+            <div class="nombre-carrera">2ª ESP. EN PERIODONCIA E IMPLANTOLOGIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="MARTES" 
+             data-inicio="990" 
+             data-fin="1080"
+             style="top: 760px; height: 120px; background: #F5CAC3; border-left-color: #F5CAC3;">
+            
+            <div class="nombre-curso">ANATOMIA Y PATOLOGIA PERIODONTAL <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">LUIS ANAYA M.</div>
+            <div class="nombre-carrera">2ª ESP. EN PERIODONCIA E IMPLANTOLOGIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="MARTES" 
+             data-inicio="1110" 
+             data-fin="1200"
+             style="top: 920px; height: 120px; background: #B5E48C; border-left-color: #B5E48C;">
+            
+            <div class="nombre-curso">PRACT. FORENSE ESPECIAL I: DCHO. DE LA EMPRESA <span class="grupo-seccion">(I)</span></div>
+            <div class="nombre-docente">CARLOS NEYRA A.</div>
+            <div class="nombre-carrera">DERECHO</div>
+        
+        </div>
+
+        </div>
+</div>
+<div class="columna" data-dia="MIÉRCOLES">
+<div class="titulo-dia">MIÉRCOLES</div>
+<div class="bloque-contenedor">
+
+        <div class="curso" 
+             data-dia="MIÉRCOLES" 
+             data-inicio="675" 
+             data-fin="765"
+             style="top: 340px; height: 120px; background: #9D8189; border-left-color: #9D8189;">
+            
+            <div class="nombre-curso">FOTOGRAFIA Y MANEJO DIGITAL <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">MARIA CHOQUE Y.</div>
+            <div class="nombre-carrera">2ª ESP. EN PERIODONCIA E IMPLANTOLOGIA</div>
+        
+        </div>
+
+        </div>
+</div>
+<div class="columna" data-dia="JUEVES">
+<div class="titulo-dia">JUEVES</div>
+<div class="bloque-contenedor">
+
+        <div class="curso" 
+             data-dia="JUEVES" 
+             data-inicio="660" 
+             data-fin="750"
+             style="top: 320px; height: 120px; background: #FFB5A7; border-left-color: #FFB5A7;">
+            
+            <div class="nombre-curso">MANEJO PSICOLOGICO DEL NIÑO <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">CLAUDIA BARREDA S.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="JUEVES" 
+             data-inicio="750" 
+             data-fin="840"
+             style="top: 440px; height: 120px; background: #FFD6A5; border-left-color: #FFD6A5;">
+            
+            <div class="nombre-curso">INTRODUCCION A LA ODONTOPEDIATRIA <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">RUFO FIGUEROA B.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="JUEVES" 
+             data-inicio="945" 
+             data-fin="1080"
+             style="top: 700px; height: 180px; background: #D8E2DC; border-left-color: #D8E2DC;">
+            
+            <div class="nombre-curso">DIAGNOSTICO Y PLAN DE TRATAMIENTO EN ORTODONCIA I <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">PEDRO BERNAL R.</div>
+            <div class="nombre-carrera">2ª ESP. EN ORTODONCIA Y ORTOPEDIA MAXILAR</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="JUEVES" 
+             data-inicio="1080" 
+             data-fin="1170"
+             style="top: 880px; height: 120px; background: #B5E48C; border-left-color: #B5E48C;">
+            
+            <div class="nombre-curso">PRACT. FORENSE ESPECIAL I: DCHO. DE LA EMPRESA <span class="grupo-seccion">(I)</span></div>
+            <div class="nombre-docente">CARLOS NEYRA A.</div>
+            <div class="nombre-carrera">DERECHO</div>
+        
+        </div>
+
+        </div>
+</div>
+<div class="columna" data-dia="VIERNES">
+<div class="titulo-dia">VIERNES</div>
+<div class="bloque-contenedor">
+
+        <div class="curso" 
+             data-dia="VIERNES" 
+             data-inicio="720" 
+             data-fin="810"
+             style="top: 400px; height: 120px; background: #BDE0FE; border-left-color: #BDE0FE;">
+            
+            <div class="nombre-curso">FARMACOLOGIA <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">MADELEINE CHAVEZ D.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="VIERNES" 
+             data-inicio="810" 
+             data-fin="900"
+             style="top: 520px; height: 120px; background: #FFC8DD; border-left-color: #FFC8DD;">
+            
+            <div class="nombre-curso">PREVENCION EN ODONTOPEDIATRIA <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">ELIANA GUILLEN F.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="VIERNES" 
+             data-inicio="900" 
+             data-fin="990"
+             style="top: 640px; height: 120px; background: #CDB4DB; border-left-color: #CDB4DB;">
+            
+            <div class="nombre-curso">INTRODUCCION A LA ORTODONCIA Y ORTOPEDIA PREVENTIVA E INTERCEPTIVA <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">JUSTO RAMOS G.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="VIERNES" 
+             data-inicio="900" 
+             data-fin="990"
+             style="top: 640px; height: 120px; background: #CDB4DB; border-left-color: #CDB4DB;">
+            
+            <div class="nombre-curso">INTRODUCCION A LA ORTODONCIA Y ORTOPEDIA PREVENTIVA E INTERCEPTIVA <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">PEDRO BERNAL R.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        
+        <div class="curso" 
+             data-dia="VIERNES" 
+             data-inicio="1200" 
+             data-fin="1245"
+             style="top: 1040px; height: 60px; background: #B5E48C; border-left-color: #B5E48C;">
+            
+            <div class="nombre-curso">PRACT. FORENSE ESPECIAL I: DCHO. DE LA EMPRESA <span class="grupo-seccion">(I)</span></div>
+            <div class="nombre-docente">CARLOS NEYRA A.</div>
+            <div class="nombre-carrera">DERECHO</div>
+        
+        </div>
+
+        </div>
+</div>
+<div class="columna" data-dia="SÁBADO">
+<div class="titulo-dia">SÁBADO</div>
+<div class="bloque-contenedor">
+
+        <div class="curso" 
+             data-dia="SÁBADO" 
+             data-inicio="660" 
+             data-fin="750"
+             style="top: 320px; height: 120px; background: #A8DADC; border-left-color: #A8DADC;">
+            
+            <div class="nombre-curso">ANESTESIOLOGIA <span class="grupo-seccion">(A)</span></div>
+            <div class="nombre-docente">HENRY BLANCO S.</div>
+            <div class="nombre-carrera">2ª ESP. EN ODONTOPEDIATRIA</div>
+        
+        </div>
+
+        </div>
+</div>
+
+    </div>
+    <script>
+        // Función para formatear la fecha en español
+        function formatearFecha(fecha) {
+            const opciones = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                timeZone: 'America/Lima' 
+            };
+            return fecha.toLocaleDateString('es-ES', opciones);
+        }
+
+        // Función para actualizar hora y fecha en el encabezado
+        function actualizarHoraFecha() {
+            const ahora = new Date();
+            
+            // Formatear hora HH:MM:SS
+            const horas = ahora.getHours().toString().padStart(2, '0');
+            const minutos = ahora.getMinutes().toString().padStart(2, '0');
+            const segundos = ahora.getSeconds().toString().padStart(2, '0');
+            document.getElementById('hora-actual').textContent = `${horas}:${minutos}:${segundos}`;
+            
+            // Formatear fecha
+            const fechaStr = formatearFecha(ahora);
+            document.getElementById('fecha-actual').textContent = fechaStr;
+        }
+
+        // Función para resaltar el curso actual
+        function resaltarCursoActual() {
+            const ahora = new Date();  // Hora local del navegador
+            const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+            const diaActual = dias[ahora.getDay()];
+            const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+            
+            // Remover resaltado anterior
+            document.querySelectorAll('.curso.actual').forEach(curso => {
+                curso.classList.remove('actual');
+                const indicador = curso.querySelector('.indicador-en-curso');
+                if (indicador) indicador.remove();
+            });
+            
+            // Resaltar curso actual
+            document.querySelectorAll('.curso').forEach(curso => {
+                const diaCurso = curso.getAttribute('data-dia');
+                const inicio = parseInt(curso.getAttribute('data-inicio'));
+                const fin = parseInt(curso.getAttribute('data-fin'));
+                
+                if (diaCurso === diaActual && inicio <= horaActual && horaActual < fin) {
+                    curso.classList.add('actual');
+                    
+                    // Crear indicador "EN CURSO" si no existe
+                    if (!curso.querySelector('.indicador-en-curso')) {
+                        const indicador = document.createElement('div');
+                        indicador.className = 'indicador-en-curso';
+                        // Formatear hora local
+                        const horas = ahora.getHours().toString().padStart(2, '0');
+                        const minutos = ahora.getMinutes().toString().padStart(2, '0');
+                        indicador.innerHTML = `
+                            <span class="texto-en-curso">EN CURSO</span>
+                            <span class="hora-actual-horario">${horas}:${minutos}</span>
+                        `;
+                        
+                        const carrera = curso.querySelector('.nombre-carrera');
+                        carrera.insertAdjacentElement('afterend', indicador);
+                    }
+                }
+            });
+        }
+        
+        // Actualizar al cargar la página
+        actualizarHoraFecha();
+        resaltarCursoActual();
+        
+        // Actualizar cada segundo
+        setInterval(actualizarHoraFecha, 1000);
+        setInterval(resaltarCursoActual, 60000);
+    </script>
+</body>
+</html>
