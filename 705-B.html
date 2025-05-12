@@ -1,313 +1,430 @@
+import pandas as pd
+from datetime import datetime
+import os
+import re
 
+# Leer el Excel
+try:
+    df = pd.read_excel('horario.xlsx')
+except FileNotFoundError:
+    print("Error: El archivo 'horario.xlsx' no se encuentra.")
+    exit(1)
+
+# Verificar columnas requeridas
+required_columns = ['DIA', 'INICIO', 'FIN', 'CURSO', 'G/S', 'DOCENTE', 'CARRERA', 'AULA']
+if not all(col in df.columns for col in required_columns):
+    print("Error: El archivo Excel no tiene las columnas requeridas.")
+    exit(1)
+
+# Extraer información del aula
+try:
+    aula_raw = str(df['AULA'].iloc[0]) if 'AULA' in df.columns else "No especificada"
+    match = re.search(r'(?<=-)(\d+(-\w+)?)$', aula_raw.strip())
+    if match:
+        aula = match.group(1)
+    else:
+        match_fallback = re.search(r'(\d+(-\w+)?)$', aula_raw.strip())
+        aula = match_fallback.group(1) if match_fallback else "No especificada"
+except Exception as e:
+    print(f"Error al procesar el aula: {e}")
+    aula = "No especificada"
+
+# Normalizar nombres de días
+dias_nombre = {
+    'LUN': 'LUNES',
+    'MAR': 'MARTES',
+    'MIE': 'MIÉRCOLES',
+    'JUE': 'JUEVES',
+    'VIE': 'VIERNES',
+    'SAB': 'SÁBADO',
+    'DOM': 'DOMINGO'
+}
+
+# Convertir horas a minutos desde medianoche
+def hora_a_minutos(hora_obj):
+    if isinstance(hora_obj, str):
+        try:
+            h, m = map(int, hora_obj.split(':'))
+            return h * 60 + m
+        except:
+            return 0
+    return hora_obj.hour * 60 + hora_obj.minute
+
+# Configuración de horario
+min_inicio = 420  # 7:00 AM
+min_fin = 1290    # 21:30 PM
+total_minutos = min_fin - min_inicio
+alto_total = 1366
+alto_bloque = max(20, round(alto_total / (total_minutos / 15)))
+alto_total_real = (total_minutos // 15) * alto_bloque
+
+# Preparar estructura de cursos por día
+horario = {dia: [] for dia in dias_nombre.values()}
+
+for idx, row in df.iterrows():
+    dia_abr = row['DIA']
+    if dia_abr not in dias_nombre:
+        continue
+        
+    dia = dias_nombre[dia_abr]
+    inicio = hora_a_minutos(row['INICIO'])
+    fin = hora_a_minutos(row['FIN'])
+    
+    if inicio < min_inicio or fin > min_fin:
+        print(f"Advertencia: El curso {row['CURSO']} está fuera del horario mostrado")
+        continue
+        
+    horario[dia].append({
+        'inicio': inicio,
+        'fin': fin,
+        'curso': row['CURSO'],
+        'grupo_seccion': row['G/S'],
+        'docente': row['DOCENTE'],
+        'carrera': row['CARRERA'],
+        'aula': row['AULA']
+    })
+
+# Determinar qué días tienen horarios
+dias_con_horario = [dia for dia in dias_nombre.values() if horario[dia]]
+
+# Colores pastel para cursos
+colores_pastel = [
+    "#A8DADC", "#F6BD60", "#84A59D", "#F28482", "#F5CAC3",
+    "#B5E48C", "#9D8189", "#FFB5A7", "#FFD6A5", "#D8E2DC",
+    "#BDE0FE", "#FFC8DD", "#CDB4DB"
+]
+
+curso_a_color = {}
+color_index = 0
+
+def obtener_color(curso):
+    global color_index
+    if curso not in curso_a_color:
+        curso_a_color[curso] = colores_pastel[color_index % len(colores_pastel)]
+        color_index += 1
+    return curso_a_color[curso]
+
+# Crear el HTML
+html = f'''
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horario Académico - Aula 705-B</title>
+    <title>Horario Académico - Aula {aula}</title>
     <style>
-        :root {
-            --header-height: 15vh;
-            --header-min-height: 150px;
-            --header-max-height: 250px;
-        }
+        :root {{
+            --header-height: 12vh;
+            --header-min-height: 100px;
+            --header-max-height: 150px;
+            --color-primario: #7fb174;
+            --color-secundario: #5a8f5a;
+        }}
         
-        body {
-            font-family: Arial, sans-serif;
+        * {{
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            background: white;
-        }
+        }}
         
-        .header-container {
+        body {{
+            font-family: Arial, sans-serif;
+            background: white;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }}
+        
+        .header-container {{
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background: #7fb174;
+            background: var(--color-primario);
             z-index: 300;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             height: var(--header-height);
             min-height: var(--header-min-height);
             max-height: var(--header-max-height);
-        }
+        }}
         
-        .header-content {
+        .header-content {{
             margin: 0 auto;
             display: flex;
             flex-direction: column;
             height: 100%;
-            padding: 10px 15px;
-            box-sizing: border-box;
-        }
+            padding: 1vh 15px;
+        }}
         
-        .header-top {
+        .header-top {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 30%;
-        }
+            height: 40%;
+        }}
         
-        .logo {
+        .logo {{
             height: 5vh;
-            min-height: 40px;
+            min-height: 30px;
             max-height: 50px;
             width: auto;
-        }
+        }}
         
-        .aula-info {
-            font-size: 8vh;
+        .aula-info {{
+            font-size: min(8vh, 10vw);
             font-weight: bold;
             color: white;
             text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
             text-align: center;
             line-height: 1;
-            height: 70%;
+            height: 60%;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-grow: 1;
-            padding: 10px 0;
-            box-sizing: border-box;
-        }
+            padding: 0.5vh 0;
+            word-break: break-word;
+        }}
         
-        .hora-fecha-container {
+        .hora-fecha-container {{
             color: white;
             text-align: right;
-        }
+            font-size: min(2.5vh, 3.5vw);
+        }}
         
-        .hora-actual {
-            font-size: 3vh;
+        .hora-actual {{
             font-weight: bold;
             white-space: nowrap;
-        }
+        }}
         
-        .fecha-actual {
-            font-size: 1.5vh;
+        .fecha-actual {{
             white-space: nowrap;
-        }
+        }}
         
-        .horario {
-            margin: 0 auto;
+        .horario-container {{
+            margin-top: var(--header-height);
+            width: 100vw;
+            height: calc(100vh - var(--header-height));
+            overflow-y: auto;
+        }}
+        
+        .horario {{
             display: grid;
-            grid-template-columns: 12vw repeat(6, minmax(18vw, 1fr));
+            grid-template-columns: 14vw repeat({len(dias_con_horario)}, minmax(0, 1fr));
             background: white;
-            padding-top: var(--header-height);
-        }
+            height: {alto_total_real}px;
+            width: 100%;
+            min-width: fit-content;
+        }}
         
-        .hora-columna {
+        .hora-columna {{
             position: sticky;
-            top: var(--header-height);
+            left: 0;
             z-index: 200;
-            background: #7fb174;
-        }
+            background: var(--color-primario);
+            display: flex;
+            flex-direction: column;
+        }}
         
-        .columna {
+        .hora-fila {{
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            height: {alto_bloque}px;
+            border-bottom: 1px solid var(--color-secundario);
+            color: white;
+            background: var(--color-primario);
+            font-size: min(1.4vh, 1.6vw);
+            line-height: 1.2;
+            padding: 0 2px;
+        }}
+        
+        .hora-inicio, .hora-fin {{
+            flex: 1;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        
+        .hora-separador {{
+            flex: 0 0 auto;
+            padding: 0 2px;
+        }}
+        
+        .columna {{
             border-left: 1px solid #ddd;
             min-width: 0;
-        }
+        }}
         
-        .titulo-dia {
+        .titulo-dia {{
             position: sticky;
-            top: var(--header-height);
+            top: 0;
             z-index: 200;
             text-align: center;
             font-weight: bold;
             padding: 8px 0;
-            background: #7fb174;
-            border-bottom: 1px solid #5a8f5a;
-            font-size: 1.5vh;
+            background: var(--color-primario);
+            border-bottom: 1px solid var(--color-secundario);
             color: white;
             text-transform: uppercase;
-        }
+            font-size: min(1.5vh, 1.7vw);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
         
-        .hora {
-            height: 24px;
-            font-size: 1.5vh;
-            border-bottom: 1px solid #5a8f5a;
-            text-align: center;
-            box-sizing: border-box;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #7fb174;
-        }
-        
-        .bloque-contenedor {
+        .bloque-contenedor {{
             position: relative;
-            height: 1392px;
+            height: {alto_total_real}px;
             background: repeating-linear-gradient(
                 to bottom,
                 transparent,
-                transparent 23px,
-                #f5f5f5 23px,
-                #f5f5f5 24px
+                transparent {alto_bloque - 1}px,
+                #f5f5f5 {alto_bloque - 1}px,
+                #f5f5f5 {alto_bloque}px
             );
-        }
+        }}
         
-        .curso {
+        .curso {{
             position: absolute;
             left: 1px;
             right: 1px;
-            padding: 2px 4px;
-            font-size: 1.5vh;
+            padding: 2px;
             overflow: hidden;
             background: #ddd;
             color: #333;
-            box-sizing: border-box;
             border-left: 3px solid #999;
-            text-align: center;
             display: flex;
             flex-direction: column;
-            word-wrap: break-word;
-            white-space: normal;
-            overflow-wrap: break-word;
             align-items: center;
-            transition: all 0.3s ease;
+            justify-content: center;
+            text-align: center;
+            transition: all 0.2s ease;
             z-index: 100;
-            max-height: 100%;
-        }
+            cursor: pointer;
+        }}
         
-        .curso.actual {
+        .contenido-curso {{
+            width: 100%;
+            padding: 2px;
+        }}
+        
+        .contenido-normal {{
+            display: flex;
+            flex-direction: column;
+        }}
+        
+        .contenido-completo {{
+            display: none;
+            flex-direction: column;
+        }}
+        
+        .nombre-curso {{
+            font-weight: bold;
+            font-size: min(max(1.2vh, 10px), 1.4vw);
+            color: #222;
+        }}
+        
+        .grupo-seccion {{
+            font-weight: normal;
+        }}
+        
+        .nombre-docente {{
+            font-size: min(max(1.0vh, 8px), 1.2vw);
+            color: #555;
+            font-style: italic;
+            margin-top: 2px;
+        }}
+        
+        .nombre-carrera {{
+            font-size: min(max(0.9vh, 7px), 1.1vw);
+            color: #666;
+            margin-top: 2px;
+        }}
+        
+        /* Hover para desktop */
+        @media (hover: hover) {{
+            .curso:hover .contenido-normal {{
+                display: none;
+            }}
+            
+            .curso:hover .contenido-completo {{
+                display: flex;
+            }}
+            
+            .curso:hover {{
+                overflow: visible;
+                z-index: 150;
+                background: #f0f0f0;
+                box-shadow: 0 0 10px rgba(0,0,0,0.2);
+                min-height: fit-content;
+            }}
+        }}
+        
+        /* Comportamiento para móviles */
+        @media (max-width: 768px) {{
+            .curso.activo {{
+                z-index: 200;
+                min-height: fit-content;
+                overflow: visible;
+                background: #f0f0f0;
+                box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            }}
+            
+            .curso.activo .contenido-normal {{
+                display: none;
+            }}
+            
+            .curso.activo .contenido-completo {{
+                display: flex;
+            }}
+        }}
+        
+        /* Estilos para curso actual */
+        .curso.actual {{
             border: 3px solid #ff0000 !important;
             box-shadow: 0 0 0 3px rgba(255,0,0,0.5);
             animation: pulse 1.5s infinite;
             background-color: #fff0f0 !important;
             transform: scale(1.03);
             z-index: 250;
-        }
+        }}
         
-        .curso:hover {
-            overflow: visible;
-            z-index: 150;
-            background: #f0f0f0;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            min-height: fit-content;
-            transform: scale(1.02);
-            transition: all 0.3s ease;
-        }
-        
-        @keyframes pulse {
-            0% {
-                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
-            }
-            70% {
-                box-shadow: 0 0 0 15px rgba(255, 0, 0, 0);
-            }
-            100% {
-                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
-            }
-        }
-        
-        .nombre-curso {
-            font-weight: bold;
-            font-size: 1.5vh;
-            line-height: 1.2;
-            white-space: normal;
-            overflow: visible;
-            text-overflow: clip;
-            width: 100%;
-        }
-        
-        .grupo-seccion {
-            text-decoration: underline;
-            font-weight: normal;
-        }
-        
-        .nombre-docente {
-            font-size: 1.3vh;
-            color: #555;
-            line-height: 1.2;
-            white-space: normal;
-            overflow: visible;
-            text-overflow: clip;
-            width: 100%;
-        }
-        
-        .nombre-carrera {
-            font-size: 1.2vh;
-            color: #666;
-            font-style: italic;
-            line-height: 1.2;
-            white-space: normal;
-            overflow: visible;
-            text-overflow: clip;
-            width: 100%;
-        }
-        
-        .aula-curso {
-            font-size: 1.2vh;
-            color: #444;
-            line-height: 1.2;
-            width: 100%;
-        }
-        
-        .indicador-en-curso {
-            font-size: 1.3vh;
+        .indicador-en-curso {{
+            font-size: min(max(0.9vh, 7px), 1.1vw);
             margin: 1px 0 0 0;
             text-align: center;
             width: 100%;
             background: rgba(255, 0, 0, 0.08);
             padding: 2px 0;
             border-top: 1px dashed rgba(255, 0, 0, 0.3);
-        }
+        }}
 
-        .texto-en-curso {
+        .texto-en-curso {{
             color: #d50000;
             font-weight: bold;
             display: inline;
-        }
+        }}
 
-        .hora-actual-horario {
+        .hora-actual-horario {{
             color: #ff0000;
             font-family: 'Courier New', monospace;
-            font-size: 1.2vh;
+            font-size: min(max(0.9vh, 7px), 1.1vw);
             display: inline;
             margin-left: 4px;
-        }
-
-        @media (max-width: 768px) {
-            :root {
-                --header-height: 12vh;
-                --header-min-height: 120px;
-            }
-            
-            .horario {
-                grid-template-columns: 15vw repeat(6, minmax(20vw, 1fr));
-            }
-            
-            .aula-info {
-                font-size: 6vh;
-            }
-        }
-
-        @media (max-width: 480px) {
-            :root {
-                --header-height: 10vh;
-                --header-min-height: 100px;
-            }
-            
-            .horario {
-                grid-template-columns: 18vw repeat(6, minmax(22vw, 1fr));
-            }
-            
-            .aula-info {
-                font-size: 5vh;
-            }
-            
-            .nombre-curso, .hora {
-                font-size: 1.2vh;
-            }
-            
-            .nombre-docente, .indicador-en-curso {
-                font-size: 1.1vh;
-            }
-            
-            .nombre-carrera, .aula-curso {
-                font-size: 1vh;
-            }
-        }
+        }}
+        
+        @keyframes pulse {{
+            0% {{
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+            }}
+            70% {{
+                box-shadow: 0 0 0 15px rgba(255, 0, 0, 0);
+            }}
+            100% {{
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+            }}
+        }}
     </style>
 </head>
 <body>
@@ -321,248 +438,72 @@
                     <div class="fecha-actual" id="fecha-actual">10 de mayo de 2023</div>
                 </div>
             </div>
-            <div class="aula-info">AULA 705-B</div>
+            <div class="aula-info">AULA {aula}</div>
         </div>
     </div>
 
-    <!-- Horario -->
-    <div class="horario">
-        <div class="hora-columna">
-            <div class="titulo-dia">HORARIO</div>
-<div class="hora">07:00 - 07:15</div>
-<div class="hora">07:15 - 07:30</div>
-<div class="hora">07:30 - 07:45</div>
-<div class="hora">07:45 - 08:00</div>
-<div class="hora">08:00 - 08:15</div>
-<div class="hora">08:15 - 08:30</div>
-<div class="hora">08:30 - 08:45</div>
-<div class="hora">08:45 - 09:00</div>
-<div class="hora">09:00 - 09:15</div>
-<div class="hora">09:15 - 09:30</div>
-<div class="hora">09:30 - 09:45</div>
-<div class="hora">09:45 - 10:00</div>
-<div class="hora">10:00 - 10:15</div>
-<div class="hora">10:15 - 10:30</div>
-<div class="hora">10:30 - 10:45</div>
-<div class="hora">10:45 - 11:00</div>
-<div class="hora">11:00 - 11:15</div>
-<div class="hora">11:15 - 11:30</div>
-<div class="hora">11:30 - 11:45</div>
-<div class="hora">11:45 - 12:00</div>
-<div class="hora">12:00 - 12:15</div>
-<div class="hora">12:15 - 12:30</div>
-<div class="hora">12:30 - 12:45</div>
-<div class="hora">12:45 - 13:00</div>
-<div class="hora">13:00 - 13:15</div>
-<div class="hora">13:15 - 13:30</div>
-<div class="hora">13:30 - 13:45</div>
-<div class="hora">13:45 - 14:00</div>
-<div class="hora">14:00 - 14:15</div>
-<div class="hora">14:15 - 14:30</div>
-<div class="hora">14:30 - 14:45</div>
-<div class="hora">14:45 - 15:00</div>
-<div class="hora">15:00 - 15:15</div>
-<div class="hora">15:15 - 15:30</div>
-<div class="hora">15:30 - 15:45</div>
-<div class="hora">15:45 - 16:00</div>
-<div class="hora">16:00 - 16:15</div>
-<div class="hora">16:15 - 16:30</div>
-<div class="hora">16:30 - 16:45</div>
-<div class="hora">16:45 - 17:00</div>
-<div class="hora">17:00 - 17:15</div>
-<div class="hora">17:15 - 17:30</div>
-<div class="hora">17:30 - 17:45</div>
-<div class="hora">17:45 - 18:00</div>
-<div class="hora">18:00 - 18:15</div>
-<div class="hora">18:15 - 18:30</div>
-<div class="hora">18:30 - 18:45</div>
-<div class="hora">18:45 - 19:00</div>
-<div class="hora">19:00 - 19:15</div>
-<div class="hora">19:15 - 19:30</div>
-<div class="hora">19:30 - 19:45</div>
-<div class="hora">19:45 - 20:00</div>
-<div class="hora">20:00 - 20:15</div>
-<div class="hora">20:15 - 20:30</div>
-<div class="hora">20:30 - 20:45</div>
-<div class="hora">20:45 - 21:00</div>
-<div class="hora">21:00 - 21:15</div>
-<div class="hora">21:15 - 21:30</div>
+    <!-- Contenedor del horario -->
+    <div class="horario-container">
+        <div class="horario">
+            <div class="hora-columna">
+                <div class="titulo-dia">HORARIO</div>
+'''
 
-        </div>
-<div class="columna" data-dia="LUNES">
-<div class="titulo-dia">LUNES</div>
-<div class="bloque-contenedor">
+# Generar las horas en formato de rango (7:00 - 7:15)
+current = min_inicio
+while current < min_fin:
+    hora_inicio = f"{current//60:02d}:{current%60:02d}"
+    hora_fin = f"{(current+15)//60:02d}:{(current+15)%60:02d}"
+    html += f'''
+    <div class="hora-fila">
+        <div class="hora-inicio">{hora_inicio}</div>
+        <div class="hora-separador">-</div>
+        <div class="hora-fin">{hora_fin}</div>
+    </div>
+    '''
+    current += 15
 
+html += '''
+            </div>
+'''
+
+# Agregar columnas solo para días con horarios
+for dia in dias_con_horario:
+    cursos = horario[dia]
+    html += f'<div class="columna" data-dia="{dia}">\n'
+    html += f'<div class="titulo-dia">{dia}</div>\n'
+    html += f'<div class="bloque-contenedor">\n'
+
+    # Dibujar los cursos
+    for curso in cursos:
+        top = round((curso['inicio'] - min_inicio) / 15) * alto_bloque
+        height = round((curso['fin'] - curso['inicio']) / 15) * alto_bloque
+        color = obtener_color(curso['curso'])
+        html += f'''
         <div class="curso" 
-             data-dia="LUNES" 
-             data-inicio="1065" 
-             data-fin="1155"
-             style="top: 1032px; height: 144px; background: #A8DADC; border-left-color: #A8DADC;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE CIVIL I <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">FREDY CUSIRRAMOS R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
+             data-dia="{dia}" 
+             data-inicio="{curso['inicio']}" 
+             data-fin="{curso['fin']}"
+             style="top: {top}px; height: {height}px; background: {color}; border-left-color: {color};">
+            <div class="contenido-curso">
+                <div class="contenido-normal">
+                    <div class="nombre-curso">{curso['curso']} - ({curso['grupo_seccion']})</div>
+                    <div class="nombre-carrera">{curso['carrera']}</div>
+                </div>
+                <div class="contenido-completo">
+                    <div class="nombre-curso">{curso['curso']} - ({curso['grupo_seccion']})</div>
+                    <div class="nombre-carrera">{curso['carrera']}</div>
+                    <div class="nombre-docente">{curso['docente']}</div>
+                </div>
+            </div>
+        </div>\n
+        '''
 
-        
-        <div class="curso" 
-             data-dia="LUNES" 
-             data-inicio="1155" 
-             data-fin="1245"
-             style="top: 1176px; height: 144px; background: #F6BD60; border-left-color: #F6BD60;">
-            
-            <div class="nombre-curso">PRACT. FORENSE ESPECIAL I: DCHO. DE LA EMPRESA <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">WILLIAM FARFAN R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
+    html += '</div>\n'  # cierre bloque-contenedor
+    html += '</div>\n'  # cierre columna
 
+html += '''
         </div>
-</div>
-<div class="columna" data-dia="MARTES">
-<div class="titulo-dia">MARTES</div>
-<div class="bloque-contenedor">
-
-        <div class="curso" 
-             data-dia="MARTES" 
-             data-inicio="1110" 
-             data-fin="1200"
-             style="top: 1104px; height: 144px; background: #84A59D; border-left-color: #84A59D;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE PENAL II <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">RODOLFO MALABRIGO A.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        </div>
-</div>
-<div class="columna" data-dia="MIÉRCOLES">
-<div class="titulo-dia">MIÉRCOLES</div>
-<div class="bloque-contenedor">
-
-        <div class="curso" 
-             data-dia="MIÉRCOLES" 
-             data-inicio="1065" 
-             data-fin="1155"
-             style="top: 1032px; height: 144px; background: #A8DADC; border-left-color: #A8DADC;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE CIVIL I <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">FREDY CUSIRRAMOS R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        
-        <div class="curso" 
-             data-dia="MIÉRCOLES" 
-             data-inicio="1155" 
-             data-fin="1245"
-             style="top: 1176px; height: 144px; background: #F6BD60; border-left-color: #F6BD60;">
-            
-            <div class="nombre-curso">PRACT. FORENSE ESPECIAL I: DCHO. DE LA EMPRESA <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">WILLIAM FARFAN R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        </div>
-</div>
-<div class="columna" data-dia="JUEVES">
-<div class="titulo-dia">JUEVES</div>
-<div class="bloque-contenedor">
-
-        <div class="curso" 
-             data-dia="JUEVES" 
-             data-inicio="1065" 
-             data-fin="1110"
-             style="top: 1032px; height: 72px; background: #A8DADC; border-left-color: #A8DADC;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE CIVIL I <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">FREDY CUSIRRAMOS R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        
-        <div class="curso" 
-             data-dia="JUEVES" 
-             data-inicio="1110" 
-             data-fin="1200"
-             style="top: 1104px; height: 144px; background: #84A59D; border-left-color: #84A59D;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE PENAL II <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">RODOLFO MALABRIGO A.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        </div>
-</div>
-<div class="columna" data-dia="VIERNES">
-<div class="titulo-dia">VIERNES</div>
-<div class="bloque-contenedor">
-
-        <div class="curso" 
-             data-dia="VIERNES" 
-             data-inicio="1155" 
-             data-fin="1200"
-             style="top: 1176px; height: 72px; background: #F6BD60; border-left-color: #F6BD60;">
-            
-            <div class="nombre-curso">PRACT. FORENSE ESPECIAL I: DCHO. DE LA EMPRESA <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">WILLIAM FARFAN R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        
-        <div class="curso" 
-             data-dia="VIERNES" 
-             data-inicio="1200" 
-             data-fin="1245"
-             style="top: 1248px; height: 72px; background: #84A59D; border-left-color: #84A59D;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE PENAL II <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">RODOLFO MALABRIGO A.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        </div>
-</div>
-<div class="columna" data-dia="SÁBADO">
-<div class="titulo-dia">SÁBADO</div>
-<div class="bloque-contenedor">
-
-        <div class="curso" 
-             data-dia="SÁBADO" 
-             data-inicio="1065" 
-             data-fin="1155"
-             style="top: 1032px; height: 144px; background: #A8DADC; border-left-color: #A8DADC;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE CIVIL I <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">FREDY CUSIRRAMOS R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        
-        <div class="curso" 
-             data-dia="SÁBADO" 
-             data-inicio="420" 
-             data-fin="570"
-             style="top: 0px; height: 240px; background: #A8DADC; border-left-color: #A8DADC;">
-            
-            <div class="nombre-curso">PRACTICA FORENSE CIVIL I <span class="grupo-seccion">(H)</span></div>
-            <div class="nombre-docente">FREDY CUSIRRAMOS R.</div>
-            <div class="nombre-carrera">DERECHO</div>
-        
-        </div>
-
-        </div>
-</div>
-
     </div>
     <script>
         // Función para formatear la fecha en español
@@ -626,39 +567,91 @@
                             <span class="hora-actual-horario">${horas}:${minutos}</span>
                         `;
                         
-                        const carrera = curso.querySelector('.nombre-carrera');
-                        carrera.insertAdjacentElement('afterend', indicador);
+                        const contenido = curso.querySelector('.contenido-curso');
+                        if (contenido) {
+                            contenido.insertAdjacentElement('afterend', indicador);
+                        }
                     }
                 }
             });
         }
         
-        // Actualizar al cargar la página
-        actualizarHoraFecha();
-        resaltarCursoActual();
-        
-        // Actualizar cada segundo
-        setInterval(actualizarHoraFecha, 1000);
-        setInterval(resaltarCursoActual, 60000);
-
-        // Ajustar dinámicamente el padding del horario
-        function ajustarPadding() {
+        // Función para ajustar el layout
+        function ajustarLayout() {
             const header = document.querySelector('.header-container');
-            const horario = document.querySelector('.horario');
-            if (header && horario) {
+            const horarioContainer = document.querySelector('.horario-container');
+            
+            if (header && horarioContainer) {
                 const headerHeight = header.offsetHeight;
-                horario.style.paddingTop = `${headerHeight}px`;
-                
-                // Ajustar también el sticky positioning
-                document.querySelectorAll('.hora-columna, .titulo-dia').forEach(el => {
-                    el.style.top = `${headerHeight}px`;
-                });
+                horarioContainer.style.marginTop = `${headerHeight}px`;
+                horarioContainer.style.height = `${window.innerHeight - headerHeight}px`;
             }
         }
 
-        // Ejecutar al cargar y al redimensionar
-        window.addEventListener('load', ajustarPadding);
-        window.addEventListener('resize', ajustarPadding);
+        // Gestión de interacciones con los cursos
+        function setupCursoInteractions() {
+            let timeoutId = null;
+            const cursos = document.querySelectorAll('.curso');
+            const isMobile = window.matchMedia("(max-width: 768px)").matches;
+            
+            function cerrarCursos() {
+                cursos.forEach(curso => {
+                    curso.classList.remove('activo');
+                });
+                clearTimeout(timeoutId);
+            }
+            
+            // Comportamiento para móviles
+            if (isMobile) {
+                document.addEventListener('click', function(e) {
+                    if (!e.target.closest('.curso')) {
+                        cerrarCursos();
+                    }
+                });
+                
+                cursos.forEach(curso => {
+                    curso.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        
+                        // Si ya está activo, no hacer nada
+                        if (this.classList.contains('activo')) return;
+                        
+                        cerrarCursos();
+                        this.classList.add('activo');
+                        
+                        // Cerrar después de 5 segundos
+                        timeoutId = setTimeout(() => {
+                            this.classList.remove('activo');
+                        }, 5000);
+                    });
+                });
+                
+                // Cerrar al hacer scroll
+                window.addEventListener('scroll', cerrarCursos);
+            }
+        }
+        
+        // Inicialización
+        function init() {
+            actualizarHoraFecha();
+            resaltarCursoActual();
+            ajustarLayout();
+            setupCursoInteractions();
+            
+            // Actualizar cada segundo
+            setInterval(actualizarHoraFecha, 1000);
+            setInterval(resaltarCursoActual, 60000);
+        }
+
+        window.addEventListener('load', init);
+        window.addEventListener('resize', ajustarLayout);
     </script>
 </body>
 </html>
+'''
+
+# Guardar el archivo HTML
+with open(f'{aula}.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+
+print(f"OK - Horario generado correctamente: {aula}.html")
